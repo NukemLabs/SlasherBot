@@ -14,10 +14,12 @@ TEMPLATE_PATH = ROOT / "assets" / "slasher_vhs_frame.png"
 def _font_candidates(*, bold: bool = False, mono: bool = False) -> tuple[str, ...]:
     if mono:
         return (
-            "C:/Windows/Fonts/consolab.ttf" if bold else "C:/Windows/Fonts/consola.ttf",
+            "C:/Windows/Fonts/consolab.ttf"
+            if bold
+            else "C:/Windows/Fonts/consola.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
-            if bold else
-            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            if bold
+            else "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
         )
 
     if bold:
@@ -45,10 +47,8 @@ def _font(
         except OSError:
             continue
 
-    # Linux hosts such as Railway may not have the Windows or DejaVu
-    # font files installed. Pillow 12 can scale its built-in fallback,
-    # so preserve the requested font size instead of using the tiny
-    # legacy bitmap fallback.
+    # Railway/Linux may not have every system font installed.
+    # Pillow can still provide a scalable built-in fallback.
     try:
         return ImageFont.load_default(size=size)
     except TypeError:
@@ -83,12 +83,22 @@ def _fit_single_line_font(
     size = start_size
 
     while size > min_size:
-        font = _font(size, bold=bold, mono=mono)
+        font = _font(
+            size,
+            bold=bold,
+            mono=mono,
+        )
+
         if _text_width(draw, text, font) <= max_width:
             return font
+
         size -= 2
 
-    return _font(min_size, bold=bold, mono=mono)
+    return _font(
+        min_size,
+        bold=bold,
+        mono=mono,
+    )
 
 
 def _wrap(
@@ -100,28 +110,25 @@ def _wrap(
     max_lines: int,
 ) -> list[str]:
     words = _clean(text).split()
+
     if not words:
         return [""]
 
     lines: list[str] = []
     current = ""
-    consumed = 0
 
     for word in words:
         candidate = word if not current else f"{current} {word}"
 
         if _text_width(draw, candidate, font) <= max_width:
             current = candidate
-            consumed += 1
             continue
 
         if current:
             lines.append(current)
             current = word
-            consumed += 1
         else:
             lines.append(word)
-            consumed += 1
             current = ""
 
         if len(lines) >= max_lines:
@@ -131,16 +138,21 @@ def _wrap(
         lines.append(current)
 
     rendered_count = len(" ".join(lines).split())
+
     if rendered_count < len(words) and lines:
         last = lines[-1].rstrip(" .,:;-")
+
         while last:
             candidate = last + "..."
+
             if _text_width(draw, candidate, font) <= max_width:
                 lines[-1] = candidate
                 break
+
             if " " not in last:
                 lines[-1] = "..."
                 break
+
             last = last.rsplit(" ", 1)[0]
 
     return lines[:max_lines]
@@ -154,6 +166,7 @@ def _wrap_all(
     max_width: int,
 ) -> list[str]:
     words = _clean(text).split()
+
     if not words:
         return [""]
 
@@ -187,28 +200,40 @@ def _fit_scene_text(
     max_width: int,
     max_lines: int = 3,
 ) -> tuple[ImageFont.ImageFont, list[str]]:
-    # Start large for Discord readability. Only shrink if the COMPLETE
-    # Gemini/built-in scene will not fit inside three lines.
-    for size in range(41, 27, -1):
-        font = _font(size, mono=True)
+
+    # Start slightly larger and BOLD for better readability in Discord.
+    # Only shrink if the complete scene cannot fit in 3 lines.
+    for size in range(44, 29, -1):
+        font = _font(
+            size,
+            mono=True,
+            bold=True,
+        )
+
         lines = _wrap_all(
             draw,
             text,
             font,
             max_width=max_width,
         )
+
         if len(lines) <= max_lines:
             return font, lines
 
-    # Very unusually long text: keep every word rather than adding "...".
-    # The writer already aims for short scenes, so this is mainly a safeguard.
-    font = _font(28, mono=True)
+    # Very long lines still keep every word.
+    font = _font(
+        30,
+        mono=True,
+        bold=True,
+    )
+
     lines = _wrap_all(
         draw,
         text,
         font,
         max_width=max_width,
     )
+
     return font, lines
 
 
@@ -219,37 +244,46 @@ def render_hunt_card(
     scene: str,
     action_labels: tuple[str, ...],
 ) -> io.BytesIO:
+
     image = Image.open(TEMPLATE_PATH).convert("RGB")
     draw = ImageDraw.Draw(image)
 
-    # The user's frame is 1664 x 936. These coordinates sit safely
-    # inside the black center panel.
+    # Coordinates for the black center panel
     left = 455
     right = 1210
     top = 292
     bottom = 682
+
     panel_width = right - left
 
-    red = (224, 42, 47)
-    warm_white = (226, 220, 207)
-    gray = (174, 168, 158)
+    # Slightly brighter for Discord's image compression/scaling
+    red = (238, 46, 52)
+    warm_white = (244, 239, 226)
+    gray = (190, 184, 173)
 
     victim = _clean(victim_name)
+
     if not victim.startswith("@"):
         victim = "@" + victim
+
     victim = victim[:32]
 
     killer_line = f"{_clean(killer_name).upper()} IS HUNTING"
+
     choices = "   |   ".join(
         _clean(label).upper()
         for label in action_labels
     )
 
+    # -----------------------
+    # Fonts
+    # -----------------------
+
     victim_font = _fit_single_line_font(
         draw,
         victim,
         max_width=panel_width,
-        start_size=66,
+        start_size=68,
         min_size=46,
         bold=True,
     )
@@ -258,43 +292,60 @@ def render_hunt_card(
         draw,
         killer_line,
         max_width=panel_width,
-        start_size=52,
-        min_size=36,
+        start_size=54,
+        min_size=38,
         bold=True,
         mono=True,
     )
-
 
     choices_font = _fit_single_line_font(
         draw,
         choices,
         max_width=panel_width,
-        start_size=38,
-        min_size=28,
+        start_size=40,
+        min_size=30,
         bold=True,
     )
 
-    brand_font = _font(26, mono=True)
+    brand_font = _font(
+        26,
+        mono=True,
+    )
 
+    # -----------------------
     # Victim
+    # -----------------------
+
     draw.text(
         (left, top),
         victim,
         font=victim_font,
         fill=red,
+        stroke_width=1,
+        stroke_fill=(35, 0, 0),
     )
 
-    # Killer
+    # -----------------------
+    # Killer title
+    # -----------------------
+
     y = top + 78
+
     draw.text(
         (left, y),
         killer_line,
         font=killer_font,
         fill=warm_white,
+        stroke_width=1,
+        stroke_fill=(0, 0, 0),
     )
 
-    # Scene: deliberately short so the card remains easy to read.
+    # -----------------------
+    # Scene text
+    # -----------------------
+
     y += 68
+
     scene_font, scene_lines = _fit_scene_text(
         draw,
         scene,
@@ -302,8 +353,12 @@ def render_hunt_card(
         max_lines=3,
     )
 
-    # Scale line spacing with whichever font size was needed.
-    scene_size = getattr(scene_font, "size", 32)
+    scene_size = getattr(
+        scene_font,
+        "size",
+        32,
+    )
+
     line_height = scene_size + 11
 
     for line in scene_lines:
@@ -312,37 +367,73 @@ def render_hunt_card(
             line,
             font=scene_font,
             fill=warm_white,
+            stroke_width=1,
+            stroke_fill=(0, 0, 0),
         )
+
         y += line_height
 
-    # Divider near bottom.
+    # -----------------------
+    # Divider
+    # -----------------------
+
     divider_y = bottom - 88
+
     draw.line(
-        (left, divider_y, right, divider_y),
+        (
+            left,
+            divider_y,
+            right,
+            divider_y,
+        ),
         fill=red,
         width=3,
     )
 
-    # Visual reminder of the buttons below the image.
+    # -----------------------
+    # Choices
+    # -----------------------
+
     draw.text(
-        (left, divider_y + 16),
+        (
+            left,
+            divider_y + 16,
+        ),
         choices,
         font=choices_font,
         fill=red,
+        stroke_width=1,
+        stroke_fill=(35, 0, 0),
     )
 
-    # Small bot branding.
+    # -----------------------
+    # Branding
+    # -----------------------
+
     brand = "NukemLabs  |  Slasher Bot"
-    brand_width = _text_width(draw, brand, brand_font)
+
+    brand_width = _text_width(
+        draw,
+        brand,
+        brand_font,
+    )
 
     draw.text(
-        (right - brand_width, bottom - 20),
+        (
+            right - brand_width,
+            bottom - 20,
+        ),
         brand,
         font=brand_font,
         fill=gray,
     )
 
+    # -----------------------
+    # Save
+    # -----------------------
+
     output = io.BytesIO()
+
     image.save(
         output,
         format="JPEG",
@@ -350,5 +441,7 @@ def render_hunt_card(
         optimize=True,
         progressive=True,
     )
+
     output.seek(0)
+
     return output
