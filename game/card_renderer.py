@@ -45,7 +45,14 @@ def _font(
         except OSError:
             continue
 
-    return ImageFont.load_default()
+    # Linux hosts such as Railway may not have the Windows or DejaVu
+    # font files installed. Pillow 12 can scale its built-in fallback,
+    # so preserve the requested font size instead of using the tiny
+    # legacy bitmap fallback.
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def _clean(text: str) -> str:
