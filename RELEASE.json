@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "encounters": 21,
+  "vhs_hunt_cards": true,
+  "gemini_optional": true,
+  "google_cloud_guide": true
+}
